@@ -26,14 +26,14 @@
 
             function initMap() {
                 map = new google.maps.Map(document.getElementById('map'), {
-                    zoom: 8
+                    zoom: 10
                 });
                 var boundary = new google.maps.KmlLayer({
-                    url: "http://ec2-54-145-145-1.compute-1.amazonaws.com{{url_for('static',filename='Boundary.kml')}}",
+                    url: "http://34.207.240.31/{{url_for('static',filename='Boundary.kml')}}",
                     preserveViewport: false,
                     map: map
                 });
-                var kmz_Layer = new google.maps.KmlLayer("http://ec2-54-145-145-1.compute-1.amazonaws.com{{url_for('static',filename='bridges.kmz')}}"+"?dummy="+(new Date()).getTime());
+                var kmz_Layer = new google.maps.KmlLayer("http://34.207.240.31/{{url_for('static',filename='bridges.kmz')}}"+"?dummy="+(new Date()).getTime());
                 kmz_Layer.setMap(map);
             }
         </script>
