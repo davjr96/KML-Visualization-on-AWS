@@ -56,7 +56,8 @@
             var boundary = new google.maps.KmlLayer({
                 url: "http://" + window.location.hostname + "/{{url_for('static',filename='studyarea/Boundary.kml')}}",
                 preserveViewport: false,
-                map: map
+                map: map,
+                clickable: false
             });
             var kmz_Layer = new google.maps.KmlLayer("http://" + window.location.hostname + "/{{url_for('static',filename='bridgekmzs/' + kmz)}}" + "?dummy=" + (new Date()).getTime());
             kmz_Layer.setMap(map);
