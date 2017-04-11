@@ -33,36 +33,22 @@
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Select Data</a>
                     <div class="dropdown-menu" aria-labelledby="dropdown01">
-                        {% for file in files %}
-                        <a class="dropdown-item" href="/view/{{file}}">{{file}}</a>
-                        {% endfor %}
+                      {% for file in files %}
+                      <a class="dropdown-item" href="/view/{{file}}">{{file}}</a>
+                      {% endfor %}
                     </div>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/log/{{logfile}}">Traceback<span class="sr-only">(current)</span></a>
+                    <a class="nav-link" href="/log">Traceback<span class="sr-only">(current)</span></a>
                 </li>
             </ul>
         </div>
     </nav>
-    <div id="map"></div>
-    <script>
-        var map;
-        console.log();
-
-        function initMap() {
-            map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 10
-            });
-            var boundary = new google.maps.KmlLayer({
-                url: "http://" + window.location.hostname + "/{{url_for('static',filename='studyarea/Boundary.kml')}}",
-                preserveViewport: false,
-                map: map
-            });
-            var kmz_Layer = new google.maps.KmlLayer("http://" + window.location.hostname + "/{{url_for('static',filename='bridgekmzs/' + kmz)}}" + "?dummy=" + (new Date()).getTime());
-            kmz_Layer.setMap(map);
-        }
-    </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDz4za-JT70aI0YcgzQGf88mAncalvW9bo&callback=initMap" async defer></script>
+    <div>
+        <div class="container-fluid">
+            <pre>{{content}}</pre>
+        </div>
+    </div>
 </body>
 
 </html>
