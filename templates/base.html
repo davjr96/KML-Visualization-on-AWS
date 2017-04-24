@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta name="viewport" content="initial-scale=1.0">
+  <meta charset="utf-8">
+  <script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+  <style>
+    #map {
+      height: 80%;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    .scrollable-menu {
+      height: auto;
+      max-height: 200px;
+      overflow-x: hidden;
+    }
+
+    .navbar-brand {
+      transform: translateX(-50%);
+      left: 50%;
+      position: absolute;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-default">
+    <div class="container-fluid">
+      <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+        <a class="navbar-brand" href="/">Flood Prediction and Emergency Response</a>
+      </div>
+      <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+        <ul class="nav navbar-nav">
+          <li class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Data <span class="caret"></span></a>
+            <ul class="dropdown-menu">
+              {% for file in files %}
+              <li><a href="/view/{{file}}">{{file}}</a></li>
+              {% endfor %}
+            </ul>
+          </li>
+          {% if current_user.is_authenticated %}
+          <li class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Archived Data <span class="caret"></span></a>
+            <ul class="dropdown-menu scrollable-menu">
+              {% for file in archivedList %}
+              <li><a href="/view/{{file}}">{{file}}</a></li>
+              {% endfor %}
+            </ul>
+          </li>
+          {% endif %}
+          <li><a href="/log/{{logfile}}">Traceback</a></li>
+        </ul>
+        <ul class="nav navbar-nav navbar-right">
+          {% if not current_user.is_authenticated %}
+          <li><a href="/login">Login </a></li>
+          {% endif %} {% if current_user.is_authenticated %}
+          <li><a href="/logout">Logout </a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+    <div class="row">
+      <div class="col-lg-1"></div>
+      <div class="col-lg-5">
+        <div class="alert alert-info alert-dismissible" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+           <h4> You are currently viewing the model forecasted water elevation for 18 hours starting from {{title}}</h4>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        {% if alert == 0 %}
+        <div class="alert alert-success alert-dismissible" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          <h4> The model is up to date with the latest forcast.</h4>
+        </div>
+        {% endif %}
+        {% if alert == 1 %}
+        <div class="alert alert-warning alert-dismissible" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          <h4> The model is currently being re-run with the latest forecast. Check back Soon!</h4>
+        </div>
+        {% endif %}
+        {% if alert == 2 %}
+        <div class="alert alert-danger alert-dismissible" role="alert">
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          <h4> Flooding is possible </h4>
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-lg-1"></div>
+
+    </div>
+    {% block container %} {% endblock %}
+</body>
+
+</html>
