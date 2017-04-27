@@ -247,6 +247,7 @@ def send_Email(toaddr, subject, message):
     except:
         pass
 
+
 @app.route('/')
 def index():
     archived = False
@@ -341,6 +342,7 @@ def log(logfile):
     if len(files) > 5:
         for i in range (5,len(files)):
             os.remove("static/bridgekmz/" + files[i].split(".")[0]+".kmz")
+
 
     #Go through static folder and populate list of files
     LogFiles = []
