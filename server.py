@@ -20,7 +20,9 @@ from email.MIMEText import MIMEText
 from email.MIMEBase import MIMEBase
 from email import encoders
 
-fromaddr = ""
+previousURL = ""
+
+fromaddr = "uvahydroinformaticslab@gmail.com"
 password = ""
 AWSKEY = ""
 AWSSECRET = ""
@@ -75,6 +77,7 @@ def gridpt(myVal, initVal, aResVal):
 
 def data_monitor():
     global alert
+    global previousURL
     # Get newest available HRRR dataset by trying (current datetime - delta time) until
     # a dataset is available for that hour. This corrects for inconsistent posting
     # of HRRR datasets to repository
@@ -84,6 +87,9 @@ def data_monitor():
     # get newest available dataset
     dataset, url, date, hour = getData(utc_datetime, delta_T=0)
     print ("Retrieving forecast data from: %s " % url)
+    if url == previousURL:
+        return
+    previousURL = url
     var = "apcpsfc"
     precip = dataset[var]
     print ("Dataset open")
@@ -202,6 +208,7 @@ def register():
     c.execute("INSERT INTO EMAILS VALUES (?);", (email,))
     emailConn.commit()
     emailConn.close()
+    Email()
     return flask.redirect(flask.url_for('index'))
 
 @app.route("/unregister")
@@ -220,6 +227,7 @@ def Email():
     c = emailConn.cursor()
     emails = c.execute('SELECT Email FROM emails').fetchall()
     emails = list(set(emails))
+    print emails
     for email in emails:
         subject = "Test Email"
         message = "This is a test." \
@@ -247,18 +255,28 @@ def send_Email(toaddr, subject, message):
     except:
         pass
 
-
-@app.route('/')
-def index():
-    archived = False
-
+def populateNavbar():
     #Go through S3 and populate list of files
     archivedList = []
     for key in bucket.list():
         name = key.name.encode('utf-8')
-        if len(name.split('/')) > 1 and name.split('/')[0] == 'bridgekmzs':
+        if len(name.split('/')[1]) > 1 and name.split('/')[0] == 'bridgekmzs':
              archivedList.append(name.split('/')[1])
     archivedList.sort( reverse=True)
+
+    archivedTimes = []
+    for file in archivedList:
+        time = filter(type(file).isdigit, file)
+        time = datetime.strptime(time,'%Y%m%d%H%M%S')
+        archivedTimes.append(time - timedelta(minutes=time.minute, seconds = time.second, microseconds = time.microsecond) )
+    archivedTimes.sort(reverse=True)
+
+    archivedItems = []
+    for i in range(0,len(archivedTimes)):
+        newItem = {}
+        newItem['time'] = archivedTimes[i]
+        newItem['file'] = archivedList[i]
+        archivedItems.append(newItem)
 
     #Go through static folder and populate list of files
     files = []
@@ -267,48 +285,50 @@ def index():
             files.append(file)
     files.sort(reverse=True)
 
+    times = []
+    for file in files:
+        time = filter(type(file).isdigit, file)
+        time = datetime.strptime(time,'%Y%m%d%H%M%S')
+        times.append(time - timedelta(minutes=time.minute, seconds = time.second, microseconds = time.microsecond) )
+    times.sort(reverse=True)
+
+    items = []
+    for i in range(0,len(times)):
+        newItem = {}
+        newItem['time'] = times[i]
+        newItem['file'] = files[i]
+        items.append(newItem)
+
     #If there are more than 5 files in static delete the oldest
     if len(files) > 5:
         for i in range (5,len(files)):
             os.remove("static/bridgekmzs/" + files[i])
 
-    # Display the newest file
-    kmz = files[0]
-    logfile = str(kmz).split(".")[0] + ".txt"
-    title = filter(type(kmz).isdigit, kmz)
-    date = datetime.strptime(title,'%Y%m%d%H%M%S')
-    title = date
-    title = title - timedelta(minutes=title.minute, seconds = title.second, microseconds = title.microsecond)
+    return items, archivedItems
 
-    return render_template('index.html',title= title, kmz = kmz, files = files, logfile = logfile, archived = archived, archivedList = archivedList, alert = alert)
+
+@app.route('/')
+def index():
+    archived = False
+    items, archivedItems = populateNavbar()
+
+    # Display the newest file
+    kmz = items[0]['file']
+    logfile = str(kmz).split(".")[0] + ".txt"
+    title = items[0]['time']
+
+    return render_template('index.html', title= title, kmz = kmz, items=items, logfile = logfile, archived = archived, archivedItems = archivedItems, alert = alert)
 
 @app.route('/view/<kmz>')
 def view(kmz):
     archived = False
 
-    #Go through S3 and populate list of files
-    archivedList = []
-    for key in bucket.list():
-        name = key.name.encode('utf-8')
-        if len(name.split('/')) > 1 and name.split('/')[0] == 'bridgekmzs':
-            archivedList.append(name.split('/')[1])
-    archivedList.sort( reverse=True)
-
-    #Go through static folder and populate list of files
-    files = []
-    for file in os.listdir("static/bridgekmzs"):
-        if file.endswith(".kmz"):
-            files.append(file)
-    files.sort( reverse=True)
-
-    #If there are more than 5 files in static delete the oldest
-    if len(files) > 5:
-        for i in range (5,len(files)):
-            os.remove("static/bridgekmzs/" + files[i])
+    items, archivedItems = populateNavbar()
 
     logfile = str(kmz).split(".")[0] + ".txt"
+
     #If the KMZ selected is not in the static folder then it must be pulled from S3
-    if kmz not in files:
+    if len(filter(lambda file: file['file'] == kmz, items)) == 0:
         archived = True
 
     title = filter(type(kmz).isdigit, kmz)
@@ -316,33 +336,14 @@ def view(kmz):
     title = date
     title = title - timedelta(minutes=title.minute, seconds = title.second, microseconds = title.microsecond)
 
-    return render_template('index.html',title= title, kmz = str(kmz), files = files, logfile = logfile, archived = archived, archivedList = archivedList, alert = alert)
+    return render_template('index.html',title= title, kmz = str(kmz), items = items, logfile = logfile, archived = archived, archivedItems = archivedItems, alert = alert)
 
 
 @app.route('/log/<logfile>')
 def log(logfile):
     archived = False
 
-    #Go through S3 and populate list of files
-    archivedList = []
-    for key in bucket.list():
-        name = key.name.encode('utf-8')
-        if len(name.split('/')) > 1 and name.split('/')[0] == 'bridgekmzs':
-            archivedList.append(name.split('/')[1])
-    archivedList.sort( reverse=True)
-
-    #Go through static folder and populate list of files
-    files = []
-    for file in os.listdir("static/bridgekmzs"):
-        if file.endswith(".kmz"):
-            files.append(file)
-    files.sort(reverse=True)
-
-    #If there are more than 5 files in static delete the oldest
-    if len(files) > 5:
-        for i in range (5,len(files)):
-            os.remove("static/bridgekmz/" + files[i].split(".")[0]+".kmz")
-
+    items, archivedItems = populateNavbar()
 
     #Go through static folder and populate list of files
     LogFiles = []
@@ -371,7 +372,7 @@ def log(logfile):
     title = date
     title = title - timedelta(minutes=title.minute, seconds = title.second, microseconds = title.microsecond)
 
-    return render_template('log.html', title = title, content = content, files = files, logfile = logfile, archived = archived, archivedList = archivedList, alert = alert)
+    return render_template('log.html', title = title, content = content, items = items, logfile = logfile, archived = archived, archivedItems = archivedItems, alert = alert)
 
 if __name__ == "__main__":
     app.run()
