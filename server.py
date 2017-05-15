@@ -9,7 +9,10 @@ from pydap.exceptions import ServerError
 import subprocess
 import boto.ec2
 import datetime as dt
+from osgeo import gdal, osr
 import numpy as np
+import shutil
+import xarray
 from flask_apscheduler import APScheduler
 import urllib2
 import sqlite3
@@ -19,15 +22,22 @@ from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 from email.MIMEBase import MIMEBase
 from email import encoders
-
-previousURL = ""
+import paramiko
+from fastkml import kml
+from zipfile import ZipFile
 
 fromaddr = "uvahydroinformaticslab@gmail.com"
 password = ""
 AWSKEY = ""
 AWSSECRET = ""
+InstanceID = ""
+InstanceIP = ""
+InstanceUser = "Administrator"
+InstancePass = ""
+InstanceScriptLocation = "C:/Users/Administrator/Desktop/Test_workflow/runs/run_workflow.bat "
 users = {'admin': {'pw': ''}} #Login User
-
+alert = 0
+lastalertkml = ""
 """
 Global parameters:
     -Study area location (LL and UR corners of TUFLOW model bounds)
@@ -35,7 +45,6 @@ Global parameters:
      needed for grid point conversion
     (source: http://nomads.ncep.noaa.gov:9090/dods/hrrr "info" link)
 """
-alert = 0
 
 initLon = -134.09548000000  # modified that to follow the latest values on the website
 aResLon = 0.029
@@ -50,7 +59,7 @@ lat_lb = (36.321159-0.133)
 lat_ub = (37.203955-0.122955)
 
 #  Connection to AWS
-conn = boto.ec2.connect_to_region("us-east-1", aws_access_key_id=AWSKEY,
+conn1 = boto.ec2.connect_to_region("us-east-1", aws_access_key_id=AWSKEY,
                                   aws_secret_access_key=AWSSECRET)
 
 def getData(current_dt, delta_T):
@@ -75,21 +84,34 @@ def gridpt(myVal, initVal, aResVal):
     gridVal = int((myVal-initVal)/aResVal)
     return gridVal
 
+
 def data_monitor():
+    #Check latest forecast for flooding every hour
+    checkForFlooding()
     global alert
-    global previousURL
+    with open("forecasts.txt") as f:
+        ran = f.readlines()
+    ran = [x.strip() for x in ran]
+
     # Get newest available HRRR dataset by trying (current datetime - delta time) until
     # a dataset is available for that hour. This corrects for inconsistent posting
     # of HRRR datasets to repository
-    alert = 0
     utc_datetime = dt.datetime.utcnow()
     print "Open a connection to HRRR to retrieve forecast rainfall data.............\n"
     # get newest available dataset
     dataset, url, date, hour = getData(utc_datetime, delta_T=0)
     print ("Retrieving forecast data from: %s " % url)
-    if url == previousURL:
-        return
-    previousURL = url
+    
+    # Convert time to EST
+    if int(hour) >= 4:  # If hour is greater than 4 simply subtract 4
+        hour = int(hour) - 4
+    else:  # Otherwise UTC is is the next day, so subtract one from the date also
+        date = int(date) - 1
+        hour = int(hour) - 4 + 24
+
+    filename = str(date) + "-" + str(hour)+"0000"
+
+
     var = "apcpsfc"
     precip = dataset[var]
     print ("Dataset open")
@@ -109,18 +131,66 @@ def data_monitor():
                 break
             except ServerError:
                 'There was a server error. Let us try again'
-
-    if max(max_precip_value) >= 2.0:
-        alert = 1
+    if max(max_precip_value) >= 3.0 and filename not in ran:
         print max_precip_value
         print "Max value", max(max_precip_value)
-        print "Model is being run"
+        # In case running the model locally uncomment the following lines to run the batch file
 
-    # In case running through the AWS instance uncomment the following lines to start
-    # the AWS instance that includes the model
-    ## conn.start_instances(instance_ids=['<instance_ids>'])
+        f = open('forecasts.txt', 'w')
+        f.write(filename + '\n')
+        f.close()
+
+        alert = 1
+        #In case running through the AWS instance uncomment the following lines to start
+        #the AWS instance that includes the model
+        # conn1.start_instances(instance_ids=[InstanceID])
+        # # # running = False
+        # # # while running == False:
+        # # #     reservations = conn1.get_all_reservations(filters={'instance-state-name': 'running'})
+        # # #     for reservation in reservations:
+        # # #         for instance in reservation.instances:
+        # # #              if instance.instance_id == InstanceID:
+        # # #                  running = True
+        # ssh = paramiko.SSHClient()
+        # ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # ssh.connect(InstanceIP, username=InstanceUser,password=InstancePass)
+        # ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(InstanceScriptLocation + filename)
+        # print ssh_stdout.readlines()
+
+        checkForFlooding()
 
     print "Done running the model at", dt.datetime.now()
+
+
+def checkForFlooding():
+    # Go through static folder and populate list of files
+    global lastalertkml
+    global alert
+
+    files = []
+    for file in os.listdir("static/bridgekmzs"):
+        if file.endswith(".kmz"):
+            files.append(file)
+    files.sort(reverse=True)
+    redcount = 0
+
+    if files[0] != lastalertkml:
+        lastalertkml = files[0]
+        kmz = ZipFile("static/bridgekmzs/" + files[0], 'r')
+        doc = kmz.read('doc.kml')
+        k = kml.KML()
+        k.from_string(doc)
+        f = list(k.features())
+        for bridge in list(f[0].styles()):
+            for b in bridge.styles():
+                if b.color == "ff0000ff":
+                    redcount += 1
+        if redcount >= 3:
+            alert = 2
+            Email()
+        else:
+            alert = 0
+
 
 class Config(object):
     JOBS = [
@@ -128,11 +198,12 @@ class Config(object):
             'id': 'data_monitor',
             'func': 'server:data_monitor',
             'trigger': 'interval',
-            'minutes': 5
+            'minutes': 60
         }
     ]
 
     SCHEDULER_API_ENABLED = True
+
 
 #Set Up Flask Constants and Login
 app = Flask(__name__)
@@ -208,7 +279,6 @@ def register():
     c.execute("INSERT INTO EMAILS VALUES (?);", (email,))
     emailConn.commit()
     emailConn.close()
-    Email()
     return flask.redirect(flask.url_for('index'))
 
 @app.route("/unregister")
@@ -227,10 +297,10 @@ def Email():
     c = emailConn.cursor()
     emails = c.execute('SELECT Email FROM emails').fetchall()
     emails = list(set(emails))
-    print emails
     for email in emails:
-        subject = "Test Email"
-        message = "This is a test." \
+        subject = "Flood Alert Email"
+        message = "The latest forecast shows the possibility of flooding in the Hampton Roads District, VA.\n" \
+                   "Please go to http://34.207.240.31/ to see more information.\n" \
                    "To unregister visit http://ec2-34-207-240-31.compute-1.amazonaws.com/unregister?email=" + email
         send_Email(email,subject, message)
 
@@ -309,6 +379,7 @@ def populateNavbar():
 
 @app.route('/')
 def index():
+
     archived = False
     items, archivedItems = populateNavbar()
 
@@ -359,7 +430,7 @@ def log(logfile):
 
     content = ""
     #If the logfile selected is not in the static folder then it must be pulled from S3
-    if logfile + ".txt" not in LogFiles:
+    if logfile not in LogFiles:
         data = urllib2.urlopen("https://s3.amazonaws.com/floodwarningmodeldata/logs/" +logfile)
         for line in data:
             content += line

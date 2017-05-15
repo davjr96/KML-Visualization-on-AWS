@@ -13,6 +13,12 @@
                 map: map,
                 clickable: false
             });
+            var stream = new google.maps.KmlLayer({
+                url: "http://" + window.location.hostname + "/{{url_for('static',filename='studyarea/streamline.kmz')}}",
+                preserveViewport: true,
+                map: map,
+                clickable: false
+            });
             {% if not archived %}
             var kmz_Layer = new google.maps.KmlLayer({
                 url: "http://" + window.location.hostname + "/{{url_for('static',filename='bridgekmzs/' + kmz)}}" + "?dummy=" + (new Date()).getTime(),
